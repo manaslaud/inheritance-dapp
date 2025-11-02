@@ -23,6 +23,8 @@ export default function Home() {
   const [erc20Address, setErc20Address] = useState<string>("");
   const [removeAddress, setRemoveAddress] = useState<string>("");
   const [updateShareData, setUpdateShareData] = useState<{ wallet: string; share: string }>({ wallet: "", share: "" });
+  const [guardianAdd, setGuardianAdd] = useState<string>("");
+  const [guardianRemove, setGuardianRemove] = useState<string>("");
   const [mounted, setMounted] = useState<boolean>(false);
 
   const hasProvider = mounted && typeof window !== "undefined" && (window as any).ethereum;
@@ -304,6 +306,36 @@ export default function Home() {
     }
   }, [updateShareData, contractWithSigner, loadContractState]);
 
+  const addGuardian = useCallback(async () => {
+    if (!guardianAdd) return;
+    try {
+      const c = await contractWithSigner();
+      const tx = await c.addGuardian(guardianAdd);
+      setStatus("addGuardian submitted...");
+      await tx.wait();
+      setStatus("Guardian added");
+      setGuardianAdd("");
+      await loadContractState();
+    } catch (err: any) {
+      setStatus(err?.message || "addGuardian failed");
+    }
+  }, [guardianAdd, contractWithSigner, loadContractState]);
+
+  const removeGuardian = useCallback(async () => {
+    if (!guardianRemove) return;
+    try {
+      const c = await contractWithSigner();
+      const tx = await c.removeGuardian(guardianRemove);
+      setStatus("removeGuardian submitted...");
+      await tx.wait();
+      setStatus("Guardian removed");
+      setGuardianRemove("");
+      await loadContractState();
+    } catch (err: any) {
+      setStatus(err?.message || "removeGuardian failed");
+    }
+  }, [guardianRemove, contractWithSigner, loadContractState]);
+
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
       <div className="mx-auto max-w-4xl p-6">
@@ -412,8 +444,26 @@ export default function Home() {
                 />
                 <button onClick={updateBeneficiaryShare} className="rounded-md border px-3 py-2">Update Share</button>
               </div>
+              <div className="flex items-center gap-2">
+                <input
+                  className="w-full rounded border px-3 py-2"
+                  placeholder="Add guardian wallet"
+                  value={guardianAdd}
+                  onChange={(e) => setGuardianAdd(e.target.value)}
+                />
+                <button onClick={addGuardian} className="rounded-md border px-3 py-2">Add Guardian</button>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  className="w-full rounded border px-3 py-2"
+                  placeholder="Remove guardian wallet"
+                  value={guardianRemove}
+                  onChange={(e) => setGuardianRemove(e.target.value)}
+                />
+                <button onClick={removeGuardian} className="rounded-md border px-3 py-2">Remove Guardian</button>
+              </div>
             </div>
-            <p className="mt-2 text-xs text-zinc-500">Owner-only: checkIn, setHeartbeatInterval, add/remove/update beneficiaries.</p>
+            <p className="mt-2 text-xs text-zinc-500">Owner-only: checkIn, setHeartbeatInterval, add/remove/update beneficiaries, add/remove guardians.</p>
           </section>
 
           <section className="rounded-lg border bg-white p-4 shadow-sm">

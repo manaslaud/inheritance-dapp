@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BrowserProvider, Contract, JsonRpcSigner, parseEther } from "ethers";
-import { CONTRACT_ABI, CONTRACT_ADDRESS, SEPOLIA_CHAIN_ID_HEX } from "@/lib/contract";
+import { BrowserProvider, Contract, JsonRpcProvider, JsonRpcSigner, parseEther } from "ethers";
+import { CONTRACT_ABI, CONTRACT_ADDRESS, SEPOLIA_CHAIN_ID_HEX, SEPOLIA_RPC_URL } from "@/lib/contract";
 
 type Beneficiary = { wallet: string; share: bigint };
 
@@ -32,6 +32,13 @@ export default function Home() {
     if (!hasProvider) return undefined;
     return new BrowserProvider((window as any).ethereum);
   }, [hasProvider]);
+
+  const readonlyProvider = useMemo(() => {
+    if (!mounted || typeof window === "undefined") return undefined as unknown as JsonRpcProvider;
+    // Use absolute URL for ethers provider
+    const base = window.location.origin;
+    return new JsonRpcProvider(`${base}${SEPOLIA_RPC_URL}`);
+  }, [mounted]);
 
   const getSigner = useCallback(async (): Promise<JsonRpcSigner> => {
     if (!provider) throw new Error("No provider");
@@ -108,45 +115,47 @@ export default function Home() {
   }, [hasProvider]);
 
   const loadContractState = useCallback(async () => {
-    if (!contractWithProvider || !provider) return;
     try {
-      if (!isSepolia) {
-        setStatus("Switch to Sepolia to load contract state");
-        return;
-      }
-
-      const code = await provider.getCode(CONTRACT_ADDRESS);
+      if (!readonlyProvider) return;
+      const code = await readonlyProvider.getCode(CONTRACT_ADDRESS);
       if (!code || code === "0x") {
-        setStatus("No contract code found at this address on current network");
+        setStatus("No contract code found at this address on Sepolia");
         return;
       }
 
+      const c = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, readonlyProvider);
       const [o, d, hb, lc, list] = await Promise.all([
-        contractWithProvider.owner(),
-        contractWithProvider.isDeceased(),
-        contractWithProvider.heartbeatInterval(),
-        contractWithProvider.lastCheckIn(),
-        contractWithProvider.getBeneficiaries(),
+        c.owner(),
+        c.isDeceased(),
+        c.heartbeatInterval(),
+        c.lastCheckIn(),
+        c.getBeneficiaries(),
       ]);
-      console.log("o", o);
-      console.log("d", d);
-      console.log("hb", hb);
-      console.log("lc", lc);
-      console.log("list", list);
       setOwner(o as string);
       setIsDeceased(Boolean(d));
       setHeartbeatInterval(BigInt(hb));
       setLastCheckIn(BigInt(lc));
       const mapped: Beneficiary[] = (list as any[]).map((b) => ({ wallet: b.wallet as string, share: BigInt(b.share) }));
       setBeneficiaries(mapped);
+      setStatus("");
     } catch (err: any) {
       setStatus(err?.message || "Failed to load state");
     }
-  }, [contractWithProvider]);
+  }, [readonlyProvider]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    if (typeof window !== "undefined" && (window as any).ethereum) {
+      (window as any).ethereum
+        .request({ method: "eth_chainId" })
+        .then((cid: string) => setChainId(cid))
+        .catch(() => {});
+    }
+  }, [mounted]);
 
   useEffect(() => {
     if (!hasProvider) return;
